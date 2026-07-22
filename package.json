@@ -1,0 +1,31 @@
+{
+  "name": "realtime-collab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time collaborative workspace with live multi-user sync, presence, and horizontal scaling via Redis Pub/Sub.",
+  "license": "MIT",
+  "author": "Bishal Patgiri",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace server",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "typecheck": "tsc --build --verbose"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.4.1",
+    "typescript": "^5.7.2"
+  }
+}
