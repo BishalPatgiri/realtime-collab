@@ -45,7 +45,7 @@ npm run typecheck
 ## Roadmap
 
 - [x] **Stage 1** — Monorepo scaffolding & tooling
-- [ ] **Stage 2** — Express HTTP server, config & logging
+- [x] **Stage 2** — Express HTTP server, config & logging
 - [ ] **Stage 3** — WebSocket foundation & shared protocol
 - [ ] **Stage 4** — JWT authentication
 - [ ] **Stage 5** — Rooms & live document sync
