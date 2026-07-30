@@ -1,6 +1,7 @@
 import express, { type Express } from 'express';
 import { pinoHttp } from 'pino-http';
 import { logger } from './logger.js';
+import { authRouter } from './routes/auth.js';
 import { healthRouter } from './routes/health.js';
 
 /**
@@ -14,6 +15,7 @@ export function createApp(): Express {
   app.use(express.json());
 
   app.use(healthRouter);
+  app.use(authRouter);
 
   app.get('/', (_req, res) => {
     res.json({ name: 'realtime-collab', message: 'server up' });

@@ -1,7 +1,10 @@
 import { createApp } from './app.js';
+import { seedDemoUsers } from './auth/users.js';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { attachWebSocketServer } from './ws/index.js';
+
+await seedDemoUsers();
 
 const app = createApp();
 

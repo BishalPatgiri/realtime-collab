@@ -47,7 +47,7 @@ npm run typecheck
 - [x] **Stage 1** — Monorepo scaffolding & tooling
 - [x] **Stage 2** — Express HTTP server, config & logging
 - [x] **Stage 3** — WebSocket foundation & shared protocol
-- [ ] **Stage 4** — JWT authentication
+- [x] **Stage 4** — JWT authentication
 - [ ] **Stage 5** — Rooms & live document sync
 - [ ] **Stage 6** — Presence & cursors
 - [ ] **Stage 7** — Redis Pub/Sub horizontal scaling

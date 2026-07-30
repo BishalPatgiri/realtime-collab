@@ -11,6 +11,12 @@ import { z } from 'zod';
 
 export const PROTOCOL_VERSION = 1;
 
+/** A user as exposed to other clients — never includes credentials. */
+export interface PublicUser {
+  id: string;
+  username: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Client -> Server                                                    */
 /* ------------------------------------------------------------------ */
@@ -37,6 +43,7 @@ export interface WelcomeMessage {
   connectionId: string;
   protocolVersion: number;
   serverTime: string;
+  user: PublicUser;
 }
 
 export interface PongMessage {

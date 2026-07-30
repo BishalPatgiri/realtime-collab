@@ -4,16 +4,19 @@ import {
   PROTOCOL_VERSION,
   encodeServerMessage,
   parseClientMessage,
+  type PublicUser,
   type ServerMessage,
 } from '@realtime-collab/shared';
 import { logger } from '../logger.js';
 
 /**
  * A live client connection. We attach a little bookkeeping to the raw socket:
- * a stable id for logging/correlation and the liveness flag the heartbeat uses.
+ * a stable id for logging/correlation, the authenticated user, and the
+ * liveness flag the heartbeat uses.
  */
 export interface Connection extends WebSocket {
   connectionId: string;
+  user: PublicUser;
   isAlive: boolean;
 }
 
@@ -27,13 +30,14 @@ export function send(conn: Connection, message: ServerMessage): void {
  * routing its messages. Message handling for later stages (auth, rooms, doc
  * ops) plugs into the switch below.
  */
-export function handleConnection(socket: WebSocket): void {
+export function handleConnection(socket: WebSocket, user: PublicUser): void {
   const conn = socket as Connection;
   conn.connectionId = randomUUID();
+  conn.user = user;
   conn.isAlive = true;
 
-  const log = logger.child({ connectionId: conn.connectionId });
-  log.info('client connected');
+  const log = logger.child({ connectionId: conn.connectionId, userId: user.id });
+  log.info({ username: user.username }, 'client connected');
 
   conn.on('pong', () => {
     conn.isAlive = true;
@@ -44,6 +48,7 @@ export function handleConnection(socket: WebSocket): void {
     connectionId: conn.connectionId,
     protocolVersion: PROTOCOL_VERSION,
     serverTime: new Date().toISOString(),
+    user,
   });
 
   conn.on('message', (data) => {

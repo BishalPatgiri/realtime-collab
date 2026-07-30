@@ -13,6 +13,8 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+  JWT_SECRET: z.string().min(1).default('change-me-in-production'),
+  JWT_EXPIRES_IN: z.string().default('1h'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -28,6 +30,14 @@ export const config = {
   port: parsed.data.PORT,
   logLevel: parsed.data.LOG_LEVEL,
   isProduction: parsed.data.NODE_ENV === 'production',
+  jwtSecret: parsed.data.JWT_SECRET,
+  jwtExpiresIn: parsed.data.JWT_EXPIRES_IN,
 } as const;
+
+if (config.isProduction && config.jwtSecret === 'change-me-in-production') {
+  // eslint-disable-next-line no-console
+  console.error('JWT_SECRET must be set to a strong value in production');
+  process.exit(1);
+}
 
 export type Config = typeof config;
