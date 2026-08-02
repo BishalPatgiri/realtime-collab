@@ -4,10 +4,12 @@ import {
   PROTOCOL_VERSION,
   encodeServerMessage,
   parseClientMessage,
+  type ClientMessage,
   type PublicUser,
   type ServerMessage,
 } from '@realtime-collab/shared';
 import { logger } from '../logger.js';
+import { roomManager } from '../rooms/manager.js';
 
 /**
  * A live client connection. We attach a little bookkeeping to the raw socket:
@@ -18,6 +20,8 @@ export interface Connection extends WebSocket {
   connectionId: string;
   user: PublicUser;
   isAlive: boolean;
+  /** Ids of the rooms this connection has joined. */
+  rooms: Set<string>;
 }
 
 /** Send a typed server message over a connection. */
@@ -35,6 +39,7 @@ export function handleConnection(socket: WebSocket, user: PublicUser): void {
   conn.connectionId = randomUUID();
   conn.user = user;
   conn.isAlive = true;
+  conn.rooms = new Set();
 
   const log = logger.child({ connectionId: conn.connectionId, userId: user.id });
   log.info({ username: user.username }, 'client connected');
@@ -64,6 +69,7 @@ export function handleConnection(socket: WebSocket, user: PublicUser): void {
   });
 
   conn.on('close', (code) => {
+    roomManager.leaveAll(conn);
     log.info({ code }, 'client disconnected');
   });
 
@@ -72,11 +78,7 @@ export function handleConnection(socket: WebSocket, user: PublicUser): void {
   });
 }
 
-function routeMessage(
-  conn: Connection,
-  message: import('@realtime-collab/shared').ClientMessage,
-  log: typeof logger,
-): void {
+function routeMessage(conn: Connection, message: ClientMessage, log: typeof logger): void {
   switch (message.type) {
     case 'ping':
       send(conn, { type: 'pong', serverTime: new Date().toISOString() });
@@ -84,6 +86,37 @@ function routeMessage(
     case 'echo':
       send(conn, { type: 'echo', payload: message.payload });
       break;
+    case 'join': {
+      const room = roomManager.join(message.roomId, conn);
+      log.info({ roomId: message.roomId }, 'joined room');
+      // Hand the joiner the current document so it starts in sync.
+      send(conn, { type: 'joined', roomId: room.id, snapshot: room.snapshot() });
+      break;
+    }
+    case 'leave':
+      roomManager.leave(message.roomId, conn);
+      log.info({ roomId: message.roomId }, 'left room');
+      break;
+    case 'doc:op': {
+      const room = roomManager.get(message.roomId);
+      if (!room || !conn.rooms.has(message.roomId)) {
+        send(conn, { type: 'error', code: 'NOT_IN_ROOM', message: 'Join the room first' });
+        return;
+      }
+      const revision = room.applyOp(message.op);
+      // Fan the op out to everyone else editing the same document.
+      room.broadcast(
+        {
+          type: 'doc:op',
+          roomId: room.id,
+          op: message.op,
+          revision,
+          authorId: conn.user.id,
+        },
+        conn,
+      );
+      break;
+    }
     default: {
       // Exhaustiveness guard: adding a ClientMessage variant without handling
       // it here becomes a compile error.
