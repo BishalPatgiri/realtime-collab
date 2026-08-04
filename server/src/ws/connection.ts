@@ -69,13 +69,28 @@ export function handleConnection(socket: WebSocket, user: PublicUser): void {
   });
 
   conn.on('close', (code) => {
-    roomManager.leaveAll(conn);
+    // Tell each room's remaining members this connection is gone.
+    for (const roomId of conn.rooms) {
+      leaveRoom(conn, roomId);
+    }
     log.info({ code }, 'client disconnected');
   });
 
   conn.on('error', (err) => {
     log.error({ err }, 'connection error');
   });
+}
+
+/**
+ * Remove a connection from a room and notify the remaining members. Shared by
+ * the explicit `leave` message and disconnect cleanup so presence stays correct
+ * either way.
+ */
+function leaveRoom(conn: Connection, roomId: string): void {
+  const room = roomManager.get(roomId);
+  if (!room) return;
+  room.broadcast({ type: 'presence:leave', roomId, connectionId: conn.connectionId }, conn);
+  roomManager.leave(roomId, conn);
 }
 
 function routeMessage(conn: Connection, message: ClientMessage, log: typeof logger): void {
@@ -89,14 +104,39 @@ function routeMessage(conn: Connection, message: ClientMessage, log: typeof logg
     case 'join': {
       const room = roomManager.join(message.roomId, conn);
       log.info({ roomId: message.roomId }, 'joined room');
-      // Hand the joiner the current document so it starts in sync.
+      // Hand the joiner the current document and the current roster.
       send(conn, { type: 'joined', roomId: room.id, snapshot: room.snapshot() });
+      send(conn, { type: 'presence:sync', roomId: room.id, members: room.presence() });
+      // Announce the newcomer to everyone already in the room.
+      room.broadcast(
+        {
+          type: 'presence:join',
+          roomId: room.id,
+          member: { connectionId: conn.connectionId, user: conn.user, cursor: null },
+        },
+        conn,
+      );
       break;
     }
     case 'leave':
-      roomManager.leave(message.roomId, conn);
+      leaveRoom(conn, message.roomId);
       log.info({ roomId: message.roomId }, 'left room');
       break;
+    case 'cursor': {
+      const room = roomManager.get(message.roomId);
+      if (!room || !conn.rooms.has(message.roomId)) return;
+      room.setCursor(conn, message.cursor);
+      room.broadcast(
+        {
+          type: 'presence:cursor',
+          roomId: room.id,
+          connectionId: conn.connectionId,
+          cursor: message.cursor,
+        },
+        conn,
+      );
+      break;
+    }
     case 'doc:op': {
       const room = roomManager.get(message.roomId);
       if (!room || !conn.rooms.has(message.roomId)) {

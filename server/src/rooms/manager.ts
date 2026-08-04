@@ -27,7 +27,7 @@ class RoomManager {
   /** Add a connection to a room, creating the room if needed. */
   join(roomId: string, conn: Connection): Room {
     const room = this.getOrCreate(roomId);
-    room.members.add(conn);
+    room.add(conn);
     conn.rooms.add(roomId);
     return room;
   }
@@ -36,9 +36,9 @@ class RoomManager {
   leave(roomId: string, conn: Connection): void {
     const room = this.rooms.get(roomId);
     if (!room) return;
-    room.members.delete(conn);
+    room.remove(conn);
     conn.rooms.delete(roomId);
-    if (room.members.size === 0) {
+    if (room.size === 0) {
       this.rooms.delete(roomId);
     }
   }

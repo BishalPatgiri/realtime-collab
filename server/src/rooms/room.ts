@@ -1,8 +1,17 @@
-import { applyTextOp, encodeServerMessage, type DocumentSnapshot, type ServerMessage, type TextOp } from '@realtime-collab/shared';
+import {
+  applyTextOp,
+  encodeServerMessage,
+  type Cursor,
+  type DocumentSnapshot,
+  type PresenceMember,
+  type ServerMessage,
+  type TextOp,
+} from '@realtime-collab/shared';
 import type { Connection } from '../ws/connection.js';
 
 /**
- * A single collaborative document and the set of connections editing it.
+ * A single collaborative document, the set of connections editing it, and each
+ * member's cursor.
  *
  * The room owns the authoritative content. Operations are applied here in the
  * order they arrive; the resulting revision number gives every member a shared
@@ -13,6 +22,8 @@ export class Room {
   private content = '';
   private revision = 0;
   readonly members = new Set<Connection>();
+  /** Latest cursor per connection; null until the member first moves. */
+  private cursors = new Map<string, Cursor | null>();
 
   constructor(id: string) {
     this.id = id;
@@ -20,6 +31,33 @@ export class Room {
 
   snapshot(): DocumentSnapshot {
     return { content: this.content, revision: this.revision };
+  }
+
+  add(conn: Connection): void {
+    this.members.add(conn);
+    this.cursors.set(conn.connectionId, null);
+  }
+
+  remove(conn: Connection): void {
+    this.members.delete(conn);
+    this.cursors.delete(conn.connectionId);
+  }
+
+  get size(): number {
+    return this.members.size;
+  }
+
+  setCursor(conn: Connection, cursor: Cursor): void {
+    this.cursors.set(conn.connectionId, cursor);
+  }
+
+  /** Everyone currently present, with their latest cursor. */
+  presence(): PresenceMember[] {
+    return [...this.members].map((conn) => ({
+      connectionId: conn.connectionId,
+      user: conn.user,
+      cursor: this.cursors.get(conn.connectionId) ?? null,
+    }));
   }
 
   /** Apply an op to the authoritative content and return the new revision. */

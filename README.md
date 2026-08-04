@@ -49,7 +49,7 @@ npm run typecheck
 - [x] **Stage 3** — WebSocket foundation & shared protocol
 - [x] **Stage 4** — JWT authentication
 - [x] **Stage 5** — Rooms & live document sync
-- [ ] **Stage 6** — Presence & cursors
+- [x] **Stage 6** — Presence & cursors
 - [ ] **Stage 7** — Redis Pub/Sub horizontal scaling
 - [ ] **Stage 8** — React client
 - [ ] **Stage 9** — Docker & load-balanced deployment

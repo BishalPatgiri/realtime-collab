@@ -5,4 +5,5 @@
  */
 
 export * from './document.js';
+export * from './presence.js';
 export * from './protocol.js';

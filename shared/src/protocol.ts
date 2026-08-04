@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { textOp, type DocumentSnapshot, type TextOp } from './document.js';
+import { cursor, type Cursor, type PresenceMember } from './presence.js';
 
 /**
  * The wire protocol spoken over the WebSocket connection.
@@ -50,12 +51,19 @@ export const docOpMessage = z.object({
   op: textOp,
 });
 
+export const cursorMessage = z.object({
+  type: z.literal('cursor'),
+  roomId,
+  cursor,
+});
+
 export const clientMessage = z.discriminatedUnion('type', [
   pingMessage,
   echoMessage,
   joinMessage,
   leaveMessage,
   docOpMessage,
+  cursorMessage,
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessage>;
@@ -104,13 +112,46 @@ export interface DocOpBroadcast {
   authorId: string;
 }
 
+/** Sent to a joiner: everyone currently present in the room. */
+export interface PresenceSyncMessage {
+  type: 'presence:sync';
+  roomId: string;
+  members: PresenceMember[];
+}
+
+/** Broadcast when a member joins a room. */
+export interface PresenceJoinMessage {
+  type: 'presence:join';
+  roomId: string;
+  member: PresenceMember;
+}
+
+/** Broadcast when a member leaves a room (or disconnects). */
+export interface PresenceLeaveMessage {
+  type: 'presence:leave';
+  roomId: string;
+  connectionId: string;
+}
+
+/** Broadcast when a member moves their cursor/selection. */
+export interface PresenceCursorMessage {
+  type: 'presence:cursor';
+  roomId: string;
+  connectionId: string;
+  cursor: Cursor;
+}
+
 export type ServerMessage =
   | WelcomeMessage
   | PongMessage
   | EchoReplyMessage
   | ErrorMessage
   | JoinedMessage
-  | DocOpBroadcast;
+  | DocOpBroadcast
+  | PresenceSyncMessage
+  | PresenceJoinMessage
+  | PresenceLeaveMessage
+  | PresenceCursorMessage;
 
 /* ------------------------------------------------------------------ */
 /* Codec helpers                                                       */
