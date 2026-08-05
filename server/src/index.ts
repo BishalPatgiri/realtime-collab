@@ -1,5 +1,6 @@
 import { createApp } from './app.js';
 import { seedDemoUsers } from './auth/users.js';
+import { backend } from './collab/index.js';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { attachWebSocketServer } from './ws/index.js';
@@ -19,8 +20,10 @@ function shutdown(signal: string): void {
   logger.info(`${signal} received, shutting down`);
   wss.close();
   server.close(() => {
-    logger.info('HTTP server closed');
-    process.exit(0);
+    void backend.close().finally(() => {
+      logger.info('HTTP server closed');
+      process.exit(0);
+    });
   });
 }
 

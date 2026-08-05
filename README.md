@@ -8,6 +8,21 @@ Real-time collaborative workspace — live multi-user sync, presence, and horizo
 
 A single WebSocket server is easy. Making many WebSocket servers behave like one — so a user connected to instance A sees edits from a user on instance B — is the interesting part. This project builds that up from scratch: a hand-rolled WebSocket protocol, presence tracking, and a Redis Pub/Sub fan-out layer that lets the server scale horizontally behind a load balancer.
 
+## How scaling works
+
+The connection layer depends only on a `CollabBackend` interface, which has two implementations:
+
+- **Memory** — single instance, state in process memory. Zero dependencies, ideal for local dev (used when `REDIS_URL` is unset).
+- **Redis** — authoritative document and presence state live in Redis; every room event is published to a per-room Pub/Sub channel. Each instance subscribes only to the rooms it serves and relays incoming events to its local sockets. Document operations are applied with a Lua script so concurrent edits from different instances can't corrupt the content.
+
+Because every event round-trips through the backend, a user on instance A and a user on instance B share one logical room. Run it locally:
+
+```bash
+docker compose up -d                                   # Redis
+REDIS_URL=redis://localhost:6379 PORT=4000 npm run dev # instance 1
+REDIS_URL=redis://localhost:6379 PORT=4001 npm run dev # instance 2
+```
+
 ## Monorepo layout
 
 ```
@@ -50,7 +65,7 @@ npm run typecheck
 - [x] **Stage 4** — JWT authentication
 - [x] **Stage 5** — Rooms & live document sync
 - [x] **Stage 6** — Presence & cursors
-- [ ] **Stage 7** — Redis Pub/Sub horizontal scaling
+- [x] **Stage 7** — Redis Pub/Sub horizontal scaling
 - [ ] **Stage 8** — React client
 - [ ] **Stage 9** — Docker & load-balanced deployment
 - [ ] **Stage 10** — Tests & CI

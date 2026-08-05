@@ -15,6 +15,10 @@ const envSchema = z.object({
     .default('info'),
   JWT_SECRET: z.string().min(1).default('change-me-in-production'),
   JWT_EXPIRES_IN: z.string().default('1h'),
+  // Optional: when set, room state and fan-out go through Redis so the server
+  // can run as many horizontally-scaled instances. Unset = single-instance
+  // in-memory mode, handy for local development.
+  REDIS_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -32,6 +36,7 @@ export const config = {
   isProduction: parsed.data.NODE_ENV === 'production',
   jwtSecret: parsed.data.JWT_SECRET,
   jwtExpiresIn: parsed.data.JWT_EXPIRES_IN,
+  redisUrl: parsed.data.REDIS_URL,
 } as const;
 
 if (config.isProduction && config.jwtSecret === 'change-me-in-production') {

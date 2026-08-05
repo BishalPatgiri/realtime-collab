@@ -8,6 +8,7 @@ import {
   type PublicUser,
   type ServerMessage,
 } from '@realtime-collab/shared';
+import { backend } from '../collab/index.js';
 import { logger } from '../logger.js';
 import { roomManager } from '../rooms/manager.js';
 
@@ -65,14 +66,17 @@ export function handleConnection(socket: WebSocket, user: PublicUser): void {
       return;
     }
 
-    routeMessage(conn, parsed.message, log);
+    void routeMessage(conn, parsed.message, log).catch((err) => {
+      log.error({ err }, 'failed to handle message');
+      send(conn, { type: 'error', code: 'INTERNAL', message: 'Failed to process message' });
+    });
   });
 
   conn.on('close', (code) => {
     // Tell each room's remaining members this connection is gone.
-    for (const roomId of conn.rooms) {
-      leaveRoom(conn, roomId);
-    }
+    void Promise.all([...conn.rooms].map((roomId) => leaveRoom(conn, roomId))).catch((err) =>
+      log.error({ err }, 'error during disconnect cleanup'),
+    );
     log.info({ code }, 'client disconnected');
   });
 
@@ -84,16 +88,25 @@ export function handleConnection(socket: WebSocket, user: PublicUser): void {
 /**
  * Remove a connection from a room and notify the remaining members. Shared by
  * the explicit `leave` message and disconnect cleanup so presence stays correct
- * either way.
+ * either way. Presence removal and the notification go through the backend, so
+ * members on other instances see the departure too.
  */
-function leaveRoom(conn: Connection, roomId: string): void {
-  const room = roomManager.get(roomId);
-  if (!room) return;
-  room.broadcast({ type: 'presence:leave', roomId, connectionId: conn.connectionId }, conn);
-  roomManager.leave(roomId, conn);
+async function leaveRoom(conn: Connection, roomId: string): Promise<void> {
+  if (!roomManager.isMember(roomId, conn)) return;
+  await backend.removePresence(roomId, conn.connectionId);
+  await roomManager.publish(
+    roomId,
+    { type: 'presence:leave', roomId, connectionId: conn.connectionId },
+    conn.connectionId,
+  );
+  await roomManager.leave(roomId, conn);
 }
 
-function routeMessage(conn: Connection, message: ClientMessage, log: typeof logger): void {
+async function routeMessage(
+  conn: Connection,
+  message: ClientMessage,
+  log: typeof logger,
+): Promise<void> {
   switch (message.type) {
     case 'ping':
       send(conn, { type: 'pong', serverTime: new Date().toISOString() });
@@ -102,58 +115,62 @@ function routeMessage(conn: Connection, message: ClientMessage, log: typeof logg
       send(conn, { type: 'echo', payload: message.payload });
       break;
     case 'join': {
-      const room = roomManager.join(message.roomId, conn);
-      log.info({ roomId: message.roomId }, 'joined room');
-      // Hand the joiner the current document and the current roster.
-      send(conn, { type: 'joined', roomId: room.id, snapshot: room.snapshot() });
-      send(conn, { type: 'presence:sync', roomId: room.id, members: room.presence() });
-      // Announce the newcomer to everyone already in the room.
-      room.broadcast(
+      const { roomId } = message;
+      await roomManager.join(roomId, conn);
+      await backend.addPresence(roomId, {
+        connectionId: conn.connectionId,
+        user: conn.user,
+        cursor: null,
+      });
+      log.info({ roomId }, 'joined room');
+
+      // Hand the joiner the current document and the full cross-instance roster.
+      const [snapshot, members] = await Promise.all([
+        backend.getSnapshot(roomId),
+        backend.getPresence(roomId),
+      ]);
+      send(conn, { type: 'joined', roomId, snapshot });
+      send(conn, { type: 'presence:sync', roomId, members });
+
+      // Announce the newcomer to everyone else in the room, on any instance.
+      await roomManager.publish(
+        roomId,
         {
           type: 'presence:join',
-          roomId: room.id,
+          roomId,
           member: { connectionId: conn.connectionId, user: conn.user, cursor: null },
         },
-        conn,
+        conn.connectionId,
       );
       break;
     }
     case 'leave':
-      leaveRoom(conn, message.roomId);
+      await leaveRoom(conn, message.roomId);
       log.info({ roomId: message.roomId }, 'left room');
       break;
     case 'cursor': {
-      const room = roomManager.get(message.roomId);
-      if (!room || !conn.rooms.has(message.roomId)) return;
-      room.setCursor(conn, message.cursor);
-      room.broadcast(
-        {
-          type: 'presence:cursor',
-          roomId: room.id,
-          connectionId: conn.connectionId,
-          cursor: message.cursor,
-        },
-        conn,
+      const { roomId, cursor } = message;
+      if (!roomManager.isMember(roomId, conn)) return;
+      await backend.setCursor(roomId, conn.connectionId, cursor);
+      await roomManager.publish(
+        roomId,
+        { type: 'presence:cursor', roomId, connectionId: conn.connectionId, cursor },
+        conn.connectionId,
       );
       break;
     }
     case 'doc:op': {
-      const room = roomManager.get(message.roomId);
-      if (!room || !conn.rooms.has(message.roomId)) {
+      const { roomId, op } = message;
+      if (!roomManager.isMember(roomId, conn)) {
         send(conn, { type: 'error', code: 'NOT_IN_ROOM', message: 'Join the room first' });
         return;
       }
-      const revision = room.applyOp(message.op);
-      // Fan the op out to everyone else editing the same document.
-      room.broadcast(
-        {
-          type: 'doc:op',
-          roomId: room.id,
-          op: message.op,
-          revision,
-          authorId: conn.user.id,
-        },
-        conn,
+      const revision = await backend.applyOp(roomId, op);
+      // Fan the op out to everyone else editing the same document, everywhere.
+      await roomManager.publish(
+        roomId,
+        { type: 'doc:op', roomId, op, revision, authorId: conn.user.id },
+        conn.connectionId,
       );
       break;
     }
