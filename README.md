@@ -47,15 +47,26 @@ cp .env.example .env
 npm run typecheck
 ```
 
+Run the app in two terminals:
+
+```bash
+npm run dev                    # backend on :4000
+npm run dev --workspace client # client on :5173 (proxies /auth and /ws to the backend)
+```
+
+Then open http://localhost:5173 and sign in with a demo account (`alice` / `password123`).
+Open a second browser window as `bob` to watch edits, cursors, and presence sync live.
+
 ## Scripts
 
-| Command             | Description                                  |
-| ------------------- | -------------------------------------------- |
-| `npm run dev`       | Start the backend in watch mode              |
-| `npm run build`     | Build all workspaces                         |
-| `npm run typecheck` | Type-check the whole monorepo                |
-| `npm run lint`      | Lint all TypeScript sources                  |
-| `npm run format`    | Format the codebase with Prettier            |
+| Command                          | Description                                  |
+| -------------------------------- | -------------------------------------------- |
+| `npm run dev`                    | Start the backend in watch mode              |
+| `npm run dev --workspace client` | Start the React client (Vite dev server)     |
+| `npm run build`                  | Build all workspaces                         |
+| `npm run typecheck`              | Type-check the whole monorepo                |
+| `npm run lint`                   | Lint all TypeScript sources                  |
+| `npm run format`                 | Format the codebase with Prettier            |
 
 ## Roadmap
 
@@ -66,7 +77,7 @@ npm run typecheck
 - [x] **Stage 5** — Rooms & live document sync
 - [x] **Stage 6** — Presence & cursors
 - [x] **Stage 7** — Redis Pub/Sub horizontal scaling
-- [ ] **Stage 8** — React client
+- [x] **Stage 8** — React client
 - [ ] **Stage 9** — Docker & load-balanced deployment
 - [ ] **Stage 10** — Tests & CI
 
